@@ -1,9 +1,14 @@
 import os
 import torch
+import wave
+import numpy as np
 from PyPDF2 import PdfReader
 from pydub import AudioSegment
 from urllib.request import urlretrieve
 import streamlit as st
+import logging
+
+logging.basicConfig(filename='app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s')
 
 # Title and Instructions
 st.markdown("# 📚 PDF to Audiobook Converter")
@@ -26,8 +31,12 @@ def generate_audio_chunk(chunk, speaker, sample_rate, model):
         chunk_audio = AudioSegment.from_wav(audio_paths)
         return chunk_audio
     except Exception as e:
-        
+        logging.error("Exception occurred", exc_info=True)
+        # If the chunk is too long, halve it and try again
+        if "too long" in str(e) and len(chunk) > 1:
+            return generate_audio_chunk(chunk[:len(chunk) // 2], speaker, sample_rate, model)
         return None
+
 
 def text_to_audio_book(uploaded_file, speaker):
     device = torch.device('cpu')
@@ -43,7 +52,15 @@ def text_to_audio_book(uploaded_file, speaker):
     num_pages = len(pdf_reader.pages)
     progress_bar = st.progress(0)
 
-    full_audio = AudioSegment.empty()
+    if book_name is not None:
+        audiobook_file = f"{book_name}_audiobook.wav"
+    else:
+        audiobook_file = "audiobook.wav"
+
+    wavef = wave.open(audiobook_file,'w')
+    wavef.setnchannels(1) # mono
+    wavef.setsampwidth(2) 
+    wavef.setframerate(sample_rate)
 
     for page_num in range(num_pages):
         text = pdf_reader.pages[page_num].extract_text().replace('\n', ' ')
@@ -61,17 +78,12 @@ def text_to_audio_book(uploaded_file, speaker):
                 # Retry with a smaller chunk size
                 chunk = chunk[:len(chunk) // 2]
 
-            full_audio += chunk_audio
+            wavef.writeframesraw(np.array(chunk_audio.get_array_of_samples()))
 
         st.write(f"✔️ Audio for page {page_num} saved.")
         progress_bar.progress((page_num + 1) / num_pages)
 
-    if book_name is not None:
-        audiobook_file = f"{book_name}_audiobook.wav"
-    else:
-        audiobook_file = "audiobook.wav"
-
-    full_audio.export(audiobook_file, format="wav")
+    wavef.close()
     progress_bar.empty()
 
     # Download button
