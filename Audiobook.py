@@ -85,7 +85,7 @@ def text_to_audio_book(uploaded_file, speaker):
 
 # Check if model is installed, if not download it.
 if not os.path.isfile('v3_en.pt'):
-    urlretrieve('https://models.silero.ai/models/tts/en/', 'v3_en.pt')  # replace 'model_download_url' with actual URL of the model
+    urlretrieve('https://models.silero.ai/models/tts/en/', 'v3_en.pt')  
 
 if st.button('Convert to Audiobook'):
     if uploaded_file is not None:
