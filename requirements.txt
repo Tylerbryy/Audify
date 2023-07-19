@@ -1,4 +1,4 @@
 torch==2.0.0
-streamlit==0.87.0
+streamlit==1.18.1
 pydub==0.25.1
 PyPDF2==3.0.1
