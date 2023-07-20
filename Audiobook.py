@@ -12,7 +12,10 @@ logging.basicConfig(filename='app.log', filemode='w', format='%(name)s - %(level
 
 # Title and Instructions
 st.markdown("# 📚 PDF to Audiobook Converter")
-st.markdown("Upload a PDF, select a speaker, then click Convert to Audiobook. (Please note the bigger the book the longer the process will take)")
+st.markdown("""
+Upload a PDF, select a speaker, then click Convert to Audiobook. 
+(Please note the bigger the book the longer the process will take)
+""")
 
 # Select a speaker
 speaker = st.selectbox('Select a Speaker', [f'en_{i}' for i in range(1, 118)])
@@ -25,6 +28,9 @@ if uploaded_file is not None:
 else:
     book_name = None
 
+# Define placeholder for status messages
+status_placeholder = st.empty()
+
 def generate_audio_chunk(chunk, speaker, sample_rate, model):
     try:
         audio_paths = model.save_wav(text=chunk, speaker=speaker, sample_rate=sample_rate)
@@ -36,6 +42,7 @@ def generate_audio_chunk(chunk, speaker, sample_rate, model):
         if "too long" in str(e) and len(chunk) > 1:
             return generate_audio_chunk(chunk[:len(chunk) // 2], speaker, sample_rate, model)
         return None
+
 
 
 def text_to_audio_book(uploaded_file, speaker):
@@ -66,7 +73,7 @@ def text_to_audio_book(uploaded_file, speaker):
         text = pdf_reader.pages[page_num].extract_text().replace('\n', ' ')
 
         if text == '':
-            st.write(f"⚠️ No text found on page {page_num}, skipping this page.")
+            status_placeholder.warning(f"⚠️ No text found on page {page_num}, skipping this page.")
             continue
 
         chunks = [text[i:i+1000] for i in range(0, len(text), 1000)]
@@ -80,7 +87,7 @@ def text_to_audio_book(uploaded_file, speaker):
 
             wavef.writeframesraw(np.array(chunk_audio.get_array_of_samples()))
 
-        st.write(f"✔️ Audio for page {page_num} saved.")
+        status_placeholder.success(f"✔️ Audio for page {page_num} saved.")
         progress_bar.progress((page_num + 1) / num_pages)
 
     wavef.close()
