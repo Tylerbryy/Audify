@@ -7,6 +7,7 @@ from pydub import AudioSegment
 from urllib.request import urlretrieve
 import streamlit as st
 import logging
+import soundfile as sf
 
 logging.basicConfig(filename='app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s')
 
@@ -37,7 +38,6 @@ def generate_audio_chunk(chunk, speaker, sample_rate, model):
         chunk_audio = AudioSegment.from_wav(audio_paths)
         return chunk_audio
     except Exception as e:
-        logging.error("Exception occurred", exc_info=True)
         # If the chunk is too long, halve it and try again
         if "too long" in str(e) and len(chunk) > 1:
             return generate_audio_chunk(chunk[:len(chunk) // 2], speaker, sample_rate, model)
@@ -45,9 +45,19 @@ def generate_audio_chunk(chunk, speaker, sample_rate, model):
 
 
 
-def text_to_audio_book(uploaded_file, speaker):
-    device = torch.device('cpu')
-    torch.set_num_threads(torch.get_num_threads())
+def text_to_audio_book(uploaded_file, speaker, book_name=None):
+    
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+        print("Using GPU")
+        st.markdown("Using GPU")
+    else:
+        device = torch.device('cpu')
+        torch.set_num_threads(torch.get_num_threads())
+        print("Using CPU")
+        st.markdown("Using CPU")
+        
+    
     local_file = 'v3_en.pt'
 
     model = torch.package.PackageImporter(local_file).load_pickle("tts_models", "model")
@@ -60,14 +70,13 @@ def text_to_audio_book(uploaded_file, speaker):
     progress_bar = st.progress(0)
 
     if book_name is not None:
-        audiobook_file = f"{book_name}_audiobook.wav"
+        audiobook_file_wav = f"{book_name}_audiobook.wav"
+        audiobook_file_flac = f"{book_name}_audiobook.flac"
     else:
-        audiobook_file = "audiobook.wav"
+        audiobook_file_wav = "audiobook.wav"
+        audiobook_file_flac = "audiobook.flac"
 
-    wavef = wave.open(audiobook_file,'w')
-    wavef.setnchannels(1) # mono
-    wavef.setsampwidth(2) 
-    wavef.setframerate(sample_rate)
+    data_list = []  # Will store the audio data
 
     for page_num in range(num_pages):
         text = pdf_reader.pages[page_num].extract_text().replace('\n', ' ')
@@ -85,12 +94,23 @@ def text_to_audio_book(uploaded_file, speaker):
                 # Retry with a smaller chunk size
                 chunk = chunk[:len(chunk) // 2]
 
-            wavef.writeframesraw(np.array(chunk_audio.get_array_of_samples()))
+            # Convert to numpy array and append to data_list
+            data_list.append(np.array(chunk_audio.get_array_of_samples()))
 
         status_placeholder.success(f"✔️ Audio for page {page_num} saved.")
         progress_bar.progress((page_num + 1) / num_pages)
 
-    wavef.close()
+    data = np.concatenate(data_list)  # Combine all the data
+
+    if data.nbytes > 4 * (1024 ** 3):  # If data size is over 4 GB
+        sf.write(audiobook_file_flac, data, sample_rate, format='flac')
+        print("Audiobook generation completed as a FLAC file.")
+        return audiobook_file_flac
+    else:
+        sf.write(audiobook_file_wav, data, sample_rate, format='wav')
+        print("Audiobook generation completed as a WAV file.")
+        return audiobook_file_wav
+
     progress_bar.empty()
 
     # Download button
