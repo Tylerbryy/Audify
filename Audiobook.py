@@ -18,8 +18,6 @@ Upload a PDF, select a speaker, then click Convert to Audiobook.
 (Please note the bigger the book the longer the process will take)
 """)
 
-# Select a speaker
-speaker = st.selectbox('Select a Speaker', [f'en_{i}' for i in range(1, 118)])
 
 # File uploader
 uploaded_file = st.file_uploader('Upload PDF', type='pdf')
@@ -43,7 +41,20 @@ def generate_audio_chunk(chunk, speaker, sample_rate, model):
             return generate_audio_chunk(chunk[:len(chunk) // 2], speaker, sample_rate, model)
         return None
 
+# Select a speaker
+speaker = st.selectbox('Select a Speaker', [f'en_{i}' for i in range(1, 118)])
 
+# Preview speaker voice
+preview_text = st.text_input('Enter text to preview speaker voice', 'Hello, I am your selected speaker.')
+
+if st.button('Preview Voice'):
+    local_file = 'v3_en.pt'
+    model = torch.package.PackageImporter(local_file).load_pickle("tts_models", "model")
+    speaker_audio = generate_audio_chunk(preview_text, speaker, 48000, model)
+    speaker_audio.export("preview.wav", format="wav")
+    audio_file = open('preview.wav', 'rb')
+    audio_bytes = audio_file.read()
+    st.audio(audio_bytes, format='audio/wav')
 
 def text_to_audio_book(uploaded_file, speaker, book_name=None):
     
